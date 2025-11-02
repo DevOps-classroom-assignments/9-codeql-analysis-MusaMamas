@@ -29,13 +29,19 @@ jobs:
       - name: Run CodeQL analysis
         uses: github/codeql-action/analyze@v2
 
-    docker-ci:
+  docker-ci:
     name: Docker build & basic runtime tests
     runs-on: ubuntu-latest
-
+    needs: codeql-analysis
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set up QEMU (optional, for multi-arch builds)
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx (optional, recommended)
+        uses: docker/setup-buildx-action@v2
 
       - name: Build Docker image
         run: |
@@ -43,32 +49,32 @@ jobs:
 
       - name: Run container in background
         run: |
-          docker run -d --name go-web-server -p 8080:8080 go-web-server
-          for i in $(seq 1 60); do
-            if curl -sSf "http://127.0.0.1:8080/readfile?file=hello.txt" >/dev/null 2>&1; then
+          for i in $(seq 1 30); do
+            if curl -sSf "http://localhost:8080/readfile?file=hello.txt" >/dev/null 2>&1; then
               echo "Service is up"
-              exit 0
+              break
             fi
             echo "Waiting for service... ($i)"
-            docker ps || true
-            docker logs --tail 30 go-web-server || true
             sleep 1
           done
-          echo "Service did not become ready in time"
-          docker logs go-web-server || true
-          exit 1
 
       - name: Test /readfile returns expected content
         run: |
-          RESPONSE="$(curl -sSf "http://127.0.0.1:8080/readfile?file=hello.txt")"
+          RESPONSE="$(curl -sSf "http://localhost:8080/readfile?file=hello.txt")"
           echo "Response: $RESPONSE"
-          echo "$RESPONSE" | grep -q "Hello World"
+          if ! echo "$RESPONSE" | grep -q "Hello World"; then
+            echo "Unexpected response from /readfile"
+            exit 1
+          fi
 
       - name: Test /exec with a safe command
         run: |
-          RESPONSE="$(curl -sSf "http://127.0.0.1:8080/exec?cmd=echo%20ok")"
+          RESPONSE="$(curl -sSf "http://localhost:8080/exec?cmd=echo%20ok")"
           echo "Exec response: $RESPONSE"
-          echo "$RESPONSE" | grep -q "ok"
+          if ! echo "$RESPONSE" | grep -q "ok"; then
+            echo "Unexpected response from /exec"
+            exit 1
+          fi
 
       - name: Stop and remove container
         if: always()
