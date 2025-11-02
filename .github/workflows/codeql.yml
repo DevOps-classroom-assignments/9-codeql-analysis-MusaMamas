@@ -1,4 +1,35 @@
-  docker-ci:
+name: CodeQL & Docker CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  codeql-analysis:
+    name: CodeQL Analysis (Go)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v2
+        with:
+          languages: go
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v2
+
+      - name: Run CodeQL analysis
+        uses: github/codeql-action/analyze@v2
+
+    docker-ci:
     name: Docker build & basic runtime tests
     runs-on: ubuntu-latest
 
@@ -44,5 +75,3 @@
         run: |
           docker stop go-web-server || true
           docker rm go-web-server || true
-
-
